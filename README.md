@@ -74,6 +74,14 @@ python wenzhou_bus_batch.py \
 
 > 如果两份 GeoJSON 文件已存在，且未加 `--overwrite`，脚本会跳过该线路。
 
+
+
+## 示例效果
+
+运行脚本生成的高频线路示例（`demo_high_frequency.png`）：
+
+<img src="demo_high_frequency.png" alt="高频线路示例" style="zoom:50%;" />
+
 ---
 
 ## 5）命令行参数（及默认值）
