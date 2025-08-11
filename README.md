@@ -4,7 +4,7 @@
 
 * 对每个关键词（线路名）选择 **`id` 数字最小** 的候选结果（不筛选公司名）。
 * 如果输出文件已存在（且 `--overwrite` 未开启），会跳过请求，直接使用现有文件。
-* 始终会生成 **OSM 地图预览 HTML**。
+* 始终会生成 **OSM 地图预览 HTML**，包含彩色线路、偏移显示和站点信息。
 
 ---
 
@@ -15,9 +15,11 @@
 * 依赖：
 
   * `folium`（用于生成预览，可选但建议安装）
+  * `shapely`（用于线路偏移显示）
+  * `pyproj`（用于坐标投影）
 
 ```bash
-pip install folium
+pip install folium shapely pyproj
 export AMAP_WS_KEY=你的_webservice_key
 ```
 
@@ -27,7 +29,8 @@ export AMAP_WS_KEY=你的_webservice_key
 
 ## 2）文件说明
 
-* `wenzhou_bus_batch.py` — 主脚本
+* `wenzhou_bus_batch_colored_tweaked.py` — 主脚本（增强版，包含彩色显示和隐私保护）
+* `wenzhou_bus_batch.py` — 原始脚本
 * （可选）输入文件，例如 `routes.txt`：每行一个线路名（例如 `B1路`, `24路`）
 * 输出目录（默认 `out_wz/`）：
 
@@ -43,7 +46,7 @@ export AMAP_WS_KEY=你的_webservice_key
 
 ```bash
 export AMAP_WS_KEY=你的_webservice_key
-python wenzhou_bus_batch.py
+python wenzhou_bus_batch_colored_tweaked.py
 ```
 
 运行流程：
@@ -51,7 +54,7 @@ python wenzhou_bus_batch.py
 1. 用 `/v3/bus/linename` 查询线路 → 选取最小 `id` → 用 `/v3/bus/lineid` 获取详情
 2. GCJ-02 转 WGS-84
 3. 写出 `route_*.geojson` 和 `stop_*.geojson`
-4. 生成 `out_wz/preview.html`
+4. 生成 `out_wz/preview.html`（包含彩色线路、偏移显示和隐私保护的站点位置）
 
 用浏览器打开 `out_wz/preview.html` 查看地图。
 
@@ -62,7 +65,7 @@ python wenzhou_bus_batch.py
 假设有一个文件 **`high_frequency_HSR_Station.txt`**，每行一个线路名。运行示例：
 
 ```bash
-python wenzhou_bus_batch.py \
+python wenzhou_bus_batch_colored_tweaked.py \
   --file high_frequency_HSR_Station.txt \
   --preview_name high_frequency_HSR_Station_preview.html
 ```
@@ -74,9 +77,49 @@ python wenzhou_bus_batch.py \
 
 > 如果两份 GeoJSON 文件已存在，且未加 `--overwrite`，脚本会跳过该线路。
 
+---
 
+## 5）增强功能
 
-## 示例效果
+### 可视化增强
+* **彩色线路**：每条线路使用不同颜色
+* **偏移显示**：重叠线路自动偏移，避免遮挡
+* **站点信息**：点击站点显示站点名称和经过的线路
+* **线路标签**：悬停或点击线路显示线路名称
+
+### 隐私保护与合规性
+* **坐标抖动**：预览地图中的站点和线路坐标随机偏移±5米，保护隐私并符合高德地图API使用条款
+* **数据完整性**：原始GeoJSON文件保持精确坐标，仅预览时应用抖动
+* **合规使用**：遵守高德地图API服务条款和中国政府相关法规
+* **非商业用途**：仅供研究、教育和非商业用途使用
+
+### 数据来源声明
+* **数据来源**：高德地图（AMap/高德地图）WebService API
+* **地图瓦片**：OpenStreetMap（遵循OSM瓦片使用规范）
+* **使用限制**：不得用于商业用途，不得声称数据为官方或精确数据
+* **免责声明**：站点位置为近似位置，仅用于可视化展示，不适用于导航或官方用途
+
+### 使用示例
+
+**带隐私保护的增强版**（推荐用于公开分享，符合API条款）：
+```bash
+python3 wenzhou_bus_batch_colored_tweaked.py \
+  --file High_Freq_Routes.txt \
+  --preview_name high_frequency_Routes_jittered.html
+```
+
+**标准彩色版**（用于内部使用）：
+```bash
+python3 wenzhou_bus_batch_colored.py \
+  --file High_Freq_Routes.txt \
+  --preview_name high_frequency_Routes_preview.html
+```
+
+> 两个版本都提供彩色线路和偏移显示，但 `_tweaked` 版本增加了坐标抖动以符合高德地图API使用条款和中国政府法规要求。
+
+---
+
+## 6）示例效果
 
 运行脚本生成的高频线路示例（`demo_high_frequency.png`）：
 
@@ -84,7 +127,7 @@ python wenzhou_bus_batch.py \
 
 ---
 
-## 5）命令行参数（及默认值）
+## 7）命令行参数（及默认值）
 
 | 参数               | 默认值            | 说明                                              |
 | ---------------- | -------------- | ----------------------------------------------- |
@@ -103,7 +146,7 @@ python wenzhou_bus_batch.py \
 
 ---
 
-## 6）在 iPhone 上预览（同一 Wi-Fi）
+## 8）在 iPhone 上预览（同一 Wi-Fi）
 
 1. 在包含 `out_wz/` 的目录启动本地服务器：
 
@@ -121,7 +164,7 @@ python wenzhou_bus_batch.py \
 
 ---
 
-## 7）线路选择规则
+## 9）线路选择规则
 
 * 对每个关键词（如 `24路`），调用 `linename` API → **选取 `id` 数字最小** 的线路。
 * 用该 `id` 调用 `lineid` API 获取路线和站点信息。
@@ -129,7 +172,7 @@ python wenzhou_bus_batch.py \
 
 ---
 
-## 8）坐标系与地图对齐
+## 10）坐标系与地图对齐
 
 * 高德返回的是 **GCJ-02** 坐标系；脚本会转换为 **WGS-84**（适配 OSM）。
 * 脚本预览中有一个 `LON_SHIFT`（默认 `-0.00075`）用于微调地图对齐。如果你的线路在 OSM 上偏移，可以改为：
@@ -142,7 +185,7 @@ python wenzhou_bus_batch.py \
 
 ---
 
-## 9）跳过与覆盖规则
+## 11）跳过与覆盖规则
 
 * 如果 `route_<线路>.geojson` 和 `stop_<线路>.geojson` 都已存在，脚本会：
 
@@ -151,7 +194,7 @@ python wenzhou_bus_batch.py \
 
 ---
 
-## 10）常见问题
+## 12）常见问题
 
 * **`AMAP_WS_KEY is not set`**
   请先 `export AMAP_WS_KEY=你的_webservice_key`。
@@ -167,14 +210,14 @@ python wenzhou_bus_batch.py \
 
 ---
 
-## 11）内置默认线路
+## 13）内置默认线路
 
 若不传 `--keywords` 和 `--file`，脚本会用内置的 B 线及部分主干线路列表。
 你可以用自己的列表覆盖。
 
 ---
 
-## 12）可扩展功能（可选加）
+## 14）可扩展功能（可选加）
 
 * `--both-directions`：保留双向线路
 * `--company-prefix`：按公司名前缀筛选（如 `温州交运集团*`）
@@ -182,7 +225,7 @@ python wenzhou_bus_batch.py \
 
 ---
 
-## 13）许可与数据来源
+## 15）许可与数据来源
 
 * 高德数据遵守其 API 使用条款（你使用自己的 Key）
 * 地图瓦片来自 OpenStreetMap（`folium` 默认），大规模使用请遵守 OSM 瓦片使用规范

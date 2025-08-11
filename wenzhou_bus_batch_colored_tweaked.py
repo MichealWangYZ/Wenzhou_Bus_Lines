@@ -34,6 +34,9 @@ import pathlib
 import argparse
 import urllib.parse
 import urllib.request
+import itertools
+from shapely.geometry import LineString
+from pyproj import Transformer
 
 AMAP_KEY = os.getenv("AMAP_WS_KEY")  # set env: export AMAP_WS_KEY=xxxx
 BASE = "https://restapi.amap.com/v3"
@@ -218,21 +221,99 @@ def run(city: str, keywords: list, outdir: pathlib.Path, overwrite: bool, previe
     if preview:
         try:
             import folium
+            import random
+            import math
+            def jitter_coords(lon, lat, max_meters=5):
+                lat_factor = 1 / 111000  # degrees per meter
+                lon_factor = 1 / (111000 * math.cos(math.radians(lat)))
+                dlat = random.uniform(-max_meters, max_meters) * lat_factor
+                dlon = random.uniform(-max_meters, max_meters) * lon_factor
+                return lon + dlon, lat + dlat
             m = folium.Map(location=[28.000-0.02, 120.700], zoom_start=12, tiles="OpenStreetMap")
-            LON_SHIFT = -0.00075  # ~200 ft west
+            LON_SHIFT = -0.00075  # Rigid shift west
+            # Color palette
+            colors = [
+                "red", "blue", "green", "purple", "orange", "darkred", "lightred", "beige",
+                "darkblue", "darkgreen", "cadetblue", "darkpurple", "pink", "lightblue",
+                "lightgreen", "gray", "black", "lightgray"
+            ]
+            color_cycle = itertools.cycle(colors)
+            # Offset values in meters (cycle if more routes)
+            offsets = [-4, 0, 4, -8, 8, -12, 12, -16, 16, -20, 20]
+            offset_cycle = itertools.cycle(offsets)
+            # Set up projection: WGS84 to UTM zone 51N (covers Wenzhou)
+            transformer_to_utm = Transformer.from_crs("epsg:4326", "epsg:32651", always_xy=True)
+            transformer_to_wgs = Transformer.from_crs("epsg:32651", "epsg:4326", always_xy=True)
+            # Map route_id to color for stops
+            route_color_map = {}
             for f in all_route_feats:
                 coords = f["geometry"]["coordinates"]
                 name = f["properties"].get("name", "")
+                route_id = f["properties"].get("route_id", None)
+                color = next(color_cycle)
+                offset = next(offset_cycle)
+                if route_id:
+                    route_color_map[route_id] = color
                 if coords:
-                    m.add_child(folium.PolyLine(
-                        [(lat, lon + LON_SHIFT) for lon, lat in coords],
-                        weight=5,
-                        popup=name,
-                        tooltip=name
-                    ))
+                    # Project to UTM
+                    utm_coords = [transformer_to_utm.transform(lon + LON_SHIFT, lat) for lon, lat in coords]
+                    line = LineString(utm_coords)
+                    # Offset line (right side for positive, left for negative)
+                    try:
+                        offset_line = line.parallel_offset(offset, 'right', join_style=2)
+                        # parallel_offset may return MultiLineString if the line is complex
+                        if offset_line.geom_type == 'MultiLineString':
+                            offset_line = list(offset_line)[0]
+                        offset_utm_coords = list(offset_line.coords)
+                        # Back to WGS84
+                        offset_wgs_coords = [transformer_to_wgs.transform(x, y) for x, y in offset_utm_coords]
+                        # Jitter the route coordinates for privacy
+                        jittered_wgs_coords = [jitter_coords(lon, lat) for lon, lat in offset_wgs_coords]
+                        # Plot
+                        m.add_child(folium.PolyLine(
+                            [(lat, lon) for lon, lat in jittered_wgs_coords],
+                            weight=5,
+                            color=color,
+                            popup=name,
+                            tooltip=name
+                        ))
+                    except Exception as e:
+                        # Fallback: plot original if offset fails, but still jitter
+                        jittered_coords = [jitter_coords(lon + LON_SHIFT, lat) for lon, lat in coords]
+                        m.add_child(folium.PolyLine(
+                            [(lat, lon) for lon, lat in jittered_coords],
+                            weight=5,
+                            color=color,
+                            popup=name,
+                            tooltip=name
+                        ))
+            # Aggregate route info for each stop
+            stop_routes = {}  # key: (lon, lat, stop_name), value: set of route names
+            stop_colors = {}  # key: (lon, lat, stop_name), value: set of route colors
             for f in all_stop_feats[:2000]:
                 lon, lat = f["geometry"]["coordinates"]
-                m.add_child(folium.CircleMarker((lat, lon + LON_SHIFT), radius=2))
+                stop_name = f["properties"].get("stop_name", "")
+                route_name = f["properties"].get("route_name", "")
+                route_id = f["properties"].get("route_id", None)
+                color = route_color_map.get(route_id, "black")
+                key = (round(lon, 6), round(lat, 6), stop_name)
+                stop_routes.setdefault(key, set()).add(route_name)
+                stop_colors.setdefault(key, set()).add(color)
+            for (lon, lat, stop_name), route_names in stop_routes.items():
+                # Jitter the coordinates for privacy
+                jittered_lon, jittered_lat = jitter_coords(lon, lat)
+                color = list(stop_colors[(lon, lat, stop_name)])[0]
+                popup_text = f"<b>Stop:</b> {stop_name}<br><b>Routes:</b> {', '.join(sorted(route_names))}"
+                m.add_child(folium.CircleMarker(
+                    (jittered_lat, jittered_lon + LON_SHIFT),
+                    radius=4,
+                    color=color,         # border color
+                    fill=True,
+                    fill_color="white", # inside color
+                    fill_opacity=1,
+                    weight=3,
+                    popup=folium.Popup(popup_text, max_width=250)
+                ))
             out_html = outdir / preview_name
             m.save(str(out_html))
             print(f"[ok] preview: {out_html}")
