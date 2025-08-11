@@ -87,13 +87,20 @@ python wenzhou_bus_batch_colored_tweaked.py \
 * **站点信息**：点击站点显示站点名称和经过的线路
 * **线路标签**：悬停或点击线路显示线路名称
 
-### 隐私保护与合规性
-* **坐标抖动**：预览地图中的站点和线路坐标随机偏移±5米，保护隐私并符合高德地图API使用条款
-* **数据完整性**：原始GeoJSON文件保持精确坐标，仅预览时应用抖动
-* **合规使用**：遵守高德地图API服务条款和中国政府相关法规
-* **非商业用途**：仅供研究、教育和非商业用途使用
+### 可视化效果示例
+
+<figure>
+  <img src="demo_colored_map_zoomed_in.png" alt="放大视图 - 彩色线路和站点" style="zoom:50%;" />
+  <figcaption><strong>放大视图</strong> - 显示彩色线路细节</figcaption>
+</figure>
+
+<figure>
+  <img src="demo_colored_map_zommed_out.png" alt="整体视图 - 线路网络" style="zoom:50%;" />
+  <figcaption><strong>整体视图</strong> - 显示完整的线路网络布局</figcaption>
+</figure>
 
 ### 数据来源声明
+
 * **数据来源**：高德地图（AMap/高德地图）WebService API
 * **地图瓦片**：OpenStreetMap（遵循OSM瓦片使用规范）
 * **使用限制**：不得用于商业用途，不得声称数据为官方或精确数据
